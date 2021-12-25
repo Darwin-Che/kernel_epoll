@@ -1,5 +1,16 @@
 #!/bin/bash
 
+CONFIG_RUN=1
+
+while getopts "b" arg; do
+	case $arg in
+		b) 
+			CONFIG_RUN=0
+			;;
+	esac
+done
+			
+
 echo  -e "Fetching buildroot source... \t\t\t"
 if [[ -d buildroot ]]; then
 	echo "done!"
@@ -21,15 +32,6 @@ else
 	rm "linux-5.15.11.tar.xz"
 fi
 
-echo -n -e "Compiling user space app... \t\t\t"
-mkdir -p buildroot/overlay/root
-rm buildroot/overlay/root/*
-cp apps/* buildroot/overlay/root/
-for i in buildroot/overlay/root/??*.c ; do
-	gcc -static $i -o ${i%.c}.o;
-done
-echo "done!"
-
 echo -n -e "Compiling kernel... \t\t\t\t"
 pushd linux
 make x86_64_defconfig
@@ -40,25 +42,36 @@ popd
 echo -n -e "Adding init scripts... \t\t\t"
 mkdir -p buildroot/overlay/etc/init.d
 cp buildroot/output/target/etc/init.d/* buildroot/overlay/etc/init.d/
-echo "echo abcdefg" > buildroot/overlay/etc/init.d/myinit
+cat << EOT > buildroot/overlay/etc/init.d/myinit
+for i in /root/*.c; do
+	gcc $i -o ${i%.c};
+done
+EOT
 chmod 777 buildroot/overlay/etc/init.d/myinit
 echo "done!"
 
-echo -n -e "Building rootfs image... \t\t\t"
+echo -n -e "Compiling user space app... \t\t\t"
+mkdir -p buildroot/overlay/root
+rm buildroot/overlay/root/*
+cp apps/* buildroot/overlay/root/
+echo "done!"
+
 pushd buildroot
+echo -n -e "Building rootfs image... \t\t\t"
 CC="ccache gcc" make -j$(nproc) &> /tmp/br_compile.log
 echo "done! (log at /tmp/br_recompile.log)"
 popd
 
 # just run
-
-qemu-system-x86_64 \
-	-kernel linux/arch/x86/boot/bzImage \
-	-boot c \
-	-smp 1 \
-	-m 1024 \
-	-drive file=buildroot/output/images/rootfs.ext4,format=raw \
-	-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
-	-serial stdio \
-	-display none
+if [[ $CONFIG_RUN -eq 1 ]]; then
+	qemu-system-x86_64 \
+		-kernel linux/arch/x86/boot/bzImage \
+		-boot c \
+		-smp 1 \
+		-m 1024 \
+		-drive file=buildroot/output/images/rootfs.ext4,format=raw \
+		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
+		-serial stdio \
+		-display none
+fi
 
