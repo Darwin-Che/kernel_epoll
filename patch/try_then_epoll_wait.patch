@@ -1,0 +1,28 @@
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index 18b5500ea..25d5eb666 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -413,5 +413,6 @@
+ 545	x32	execveat		compat_sys_execveat
+ 546	x32	preadv2			compat_sys_preadv64v2
+ 547	x32	pwritev2		compat_sys_pwritev64v2
++548	64	try_then_epoll_wait	sys_try_then_epoll_wait
+ # This is the end of the legacy x32 range.  Numbers 548 and above are
+ # not special and are not to be used for x32-specific syscalls.
+diff --git a/fs/eventpoll.c b/fs/eventpoll.c
+index 06f4c5ae1..aa17e9ee7 100644
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -2294,6 +2294,12 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
+ 			      sigmask, sigsetsize);
+ }
+ 
++SYSCALL_DEFINE1(try_then_epoll_wait, int, epfd)
++{
++	printk("try_then_epoll_wait invoked with epfd %d\n", epfd);
++	return 0;
++}
++
+ #ifdef CONFIG_COMPAT
+ static int do_compat_epoll_pwait(int epfd, struct epoll_event __user *events,
+ 				 int maxevents, struct timespec64 *timeout,

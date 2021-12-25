@@ -4,4 +4,9 @@ Download kernel source from https://www.kernel.org/. This implementation uses th
 
 Download kernel build tool `git clone https://github.com/buildroot/buildroot.git`.
 
+# New syscall
+
+syscall number: `548`
+
+syscall name: `try_then_epoll_wait`
 
