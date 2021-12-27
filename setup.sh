@@ -3,7 +3,7 @@
 CONFIG_RUN=1
 CONFIG_BUILD=1
 
-while getopts "rb" arg; do
+while getopts "rbd" arg; do
 	case $arg in
 		r) 
 			CONFIG_RUN=0
@@ -12,6 +12,10 @@ while getopts "rb" arg; do
 		b) 
 			CONFIG_BUILD=0
 			echo "only download ----"
+			;;
+		d) 
+			CONFIG_RUN=2
+			echo "enable debug ----"
 			;;
 	esac
 done
@@ -100,5 +104,11 @@ if [[ ${CONFIG_RUN} -eq 1 ]]; then
 		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
 		-serial stdio \
 		-display none
+fi
+
+if [[ ${CONFIG_RUN} -eq 2 ]]; then
+	tmux \
+	new-session "qemu-system-x86_64 -s -S -kernel linux/arch/x86/boot/bzImage -boot c -smp 1 -m 1024 -drive file=buildroot/output/images/rootfs.ext4,format=raw -append \"root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr\"" \; \
+	split-window "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
 fi
 

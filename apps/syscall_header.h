@@ -2,9 +2,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#define __NR_try_then_epoll_wait 548
-#define try_then_epoll_wait(...) \
-	syscall(__NR_try_then_epoll_wait, \
+#define __NR_read_epoll_ctl 548
+#define read_epoll_ctl(...) \
+	syscall(__NR_read_epoll_ctl, \
 			__VA_ARGS__)
 
 
