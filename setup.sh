@@ -1,9 +1,12 @@
 #!/bin/bash
 
+CONFIG_SMP=1
+CONFIG_MEM=1024
+
 CONFIG_RUN=1
 CONFIG_BUILD=1
 
-while getopts "rbd" arg; do
+while getopts "rbds" arg; do
 	case $arg in
 		r) 
 			CONFIG_RUN=0
@@ -54,7 +57,6 @@ fi
 
 echo -n -e "Compiling kernel... \t\t\t\t"
 pushd linux
-make x86_64_defconfig
 CC="ccache gcc" make -j$((2*$(nproc)))
 if [[ $? -ne 0 ]]; then 
 	echo "Compiling kernel fail"
@@ -98,8 +100,8 @@ if [[ ${CONFIG_RUN} -eq 1 ]]; then
 	qemu-system-x86_64 \
 		-kernel linux/arch/x86/boot/bzImage \
 		-boot c \
-		-smp 1 \
-		-m 1024 \
+		-smp ${CONFIG_SMP} \
+		-m ${CONFIG_MEM} \
 		-drive file=buildroot/output/images/rootfs.ext4,format=raw \
 		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
 		-serial stdio \
@@ -107,8 +109,16 @@ if [[ ${CONFIG_RUN} -eq 1 ]]; then
 fi
 
 if [[ ${CONFIG_RUN} -eq 2 ]]; then
-	tmux \
-	new-session "qemu-system-x86_64 -s -S -kernel linux/arch/x86/boot/bzImage -boot c -smp 1 -m 1024 -drive file=buildroot/output/images/rootfs.ext4,format=raw -append \"root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr\"" \; \
-	split-window "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
+	tmux split-window -h "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
+	qemu-system-x86_64 \
+		-s -S \
+		-kernel linux/arch/x86/boot/bzImage \
+		-boot c \
+		-smp ${CONFIG_SMP} \
+		-m ${CONFIG_MEM} \
+		-drive file=buildroot/output/images/rootfs.ext4,format=raw \
+		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
+		-serial stdio \
+		-display none
 fi
 

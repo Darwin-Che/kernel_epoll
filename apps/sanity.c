@@ -101,7 +101,7 @@ int main(void) {
 	memset(&event, 0x0, sizeof(event));
 	event.events = EPOLLIN;
 	event.data.fd = accept_fd;
-	read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
+	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
 			epfd, EPOLL_CTL_ADD, &event);
 	if (retval != 0) perror("read_epoll_ctl");
 	printf("retval is %d\n", retval);
