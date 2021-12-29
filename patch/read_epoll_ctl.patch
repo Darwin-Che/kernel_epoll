@@ -10,10 +10,10 @@ index 18b5500ea..d7d9e53a3 100644
  # This is the end of the legacy x32 range.  Numbers 548 and above are
  # not special and are not to be used for x32-specific syscalls.
 diff --git a/fs/eventpoll.c b/fs/eventpoll.c
-index 06f4c5ae1..932a507e9 100644
+index 06f4c5ae1..7b20a2318 100644
 --- a/fs/eventpoll.c
 +++ b/fs/eventpoll.c
-@@ -2294,6 +2294,30 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
+@@ -2294,6 +2294,32 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
  			      sigmask, sigsetsize);
  }
  
@@ -23,22 +23,24 @@ index 06f4c5ae1..932a507e9 100644
 +		int, epfd, int, op, struct epoll_event *, event)
 +{
 +	long fcntl_result;
-+	long err = -EINVAL;
-+	// printk("read_epoll_ctl invoked with fd %d, epfd %d\n", fd, epfd);
++	ssize_t read_result;
 +	// check if fd is nonblocking
-+	fcntl_result = fcntl_handle(fd, F_GETFL, 0);
-+	// printk("O_NONBLOCK %lx\n", (long) O_NONBLOCK);
-+	fcntl_result &= O_NONBLOCK;
-+	// printk("fcntl_result %lx\n", fcntl_result);
-+	if (fcntl_result != 0) {
-+		err = 0;
++	fcntl_result = fcntl_handle(fd, F_GETFL, 0) & O_NONBLOCK;
++	if (fcntl_result == 0) {
++		return -EINVAL;
 +	}
-+	// err = fcntl_result == 0 ? -1 : 0;
++
 +	// invoke sys_read on selected input params
++	read_result = ksys_read(fd, buf, count);
++	
 +	// check sys_read return value and errno to check if it blocks
++	if (read_result != -EAGAIN) {
++		if (read_result < 0) printk("read_epoll_ctl sys_read returns unhandled error!\n");
++		return read_result;
++	}
++	
 +	// if sys_read blocks, pass selected input params to do_epoll_ctl
-+	printk("fcntl_result %lx\n", fcntl_result);
-+	return err;
++	return do_epoll_ctl(epfd, op, fd, event, false);
 +}
 +
  #ifdef CONFIG_COMPAT

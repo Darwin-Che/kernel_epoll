@@ -26,13 +26,6 @@ static int connect_fd;
 static int epfd;
 static struct epoll_event event;
 static char buffer[100];
-	
-
-static void old_syscall(void) {
-}
-
-static void new_syscall(void) {
-}
 
 static void init(void) {
 	// init socket fds
@@ -65,49 +58,68 @@ static void init(void) {
 	epfd = epoll_create(5);
 }
 
-static void reset(void) {
+static void reset(int accept_fd_is_nonblocking) {
+	int opt;
+
+	epoll_ctl(epfd, EPOLL_CTL_DEL, accept_fd, &event);
+
+	opt = fcntl(accept_fd, F_GETFL);  
+	if (opt < 0) errExit("getfl");
+	if (accept_fd_is_nonblocking) {
+		if (fcntl(accept_fd, F_SETFL, opt | O_NONBLOCK) < 0) // set O_NONBLOCK for accept_fd
+			errExit("setfl");
+	} else {
+		if (fcntl(accept_fd, F_SETFL, opt & ~O_NONBLOCK) < 0) // unset O_NONBLOCK for accept_fd
+			errExit("setfl");
+	}
+
+	memset(&event, 0x0, sizeof(event));
+	event.events = EPOLLIN;
+	event.data.fd = accept_fd;
+
+	memset(buffer, 0x0, sizeof(buffer));
+}
+
+static void assert_retval(int retval, int expected_retval, int expected_errno, const char * str) {
+	printf("retval is %d", retval);
+	if (retval < 0) {
+		printf(", errno is %d", errno);
+		// perror(str);
+		assert(errno == expected_errno);
+	}
+	printf("\n");
+	assert(retval == expected_retval);
 }
 
 int main(void) {
-	int opt;
 	int retval;
 
 	init();
 	printf("init finished\n");
 
 	// accept_fd is not nonblocking
-	reset();
-
-	memset(&event, 0x0, sizeof(event));
-	event.events = EPOLLIN;
-	event.data.fd = accept_fd;
+	reset(0);
 	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
 			epfd, EPOLL_CTL_ADD, &event);
-	if (retval != 0) perror("read_epoll_ctl");
-	printf("retval is %d\n", retval);
-	assert(retval == -1);
+	assert_retval(retval, -1, EINVAL, "read_epoll_ctl");
 	
 
 	// read doesn't block, epoll_ctl not executed
-	reset();
-	opt = fcntl(accept_fd, F_GETFL);
-	if (opt < 0)
-		errExit("getfl");
-	if (fcntl(accept_fd, F_SETFL, opt | O_NONBLOCK) < 0)
-		errExit("setfl");
-
-	if (write(connect_fd, DATA, DATASZ) == -1) 
+	reset(1);
+	if (write(connect_fd, DATA, DATASZ) == -1) // write in advance so that read doesn't block
 		errExit("write connect_fd");
-	memset(&event, 0x0, sizeof(event));
-	event.events = EPOLLIN;
-	event.data.fd = accept_fd;
 	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
 			epfd, EPOLL_CTL_ADD, &event);
-	if (retval != 0) perror("read_epoll_ctl");
-	printf("retval is %d\n", retval);
-	assert(retval == 0);
+	printf("buffer is %s\n", buffer);
+	assert_retval(retval, DATASZ, 0,"read_epoll_ctl");
 	
 	// read blocks, epoll_ctl executed
+	reset(1);
+	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
+			epfd, EPOLL_CTL_ADD, &event);
+	assert_retval(retval, 0, 0, "read_epoll_ctl");
+	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
+	assert_retval(retval, -1, EEXIST, "epoll_ctl_try_add");
 
 	// cleanup
 	close(connect_fd);
@@ -118,9 +130,5 @@ int main(void) {
 	return 0;
 }
 
-
-
-
-	
 
 
