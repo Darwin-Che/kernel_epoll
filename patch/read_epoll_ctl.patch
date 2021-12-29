@@ -10,7 +10,7 @@ index 18b5500ea..d7d9e53a3 100644
  # This is the end of the legacy x32 range.  Numbers 548 and above are
  # not special and are not to be used for x32-specific syscalls.
 diff --git a/fs/eventpoll.c b/fs/eventpoll.c
-index 06f4c5ae1..7b20a2318 100644
+index 06f4c5ae1..ed06d8767 100644
 --- a/fs/eventpoll.c
 +++ b/fs/eventpoll.c
 @@ -2294,6 +2294,32 @@ SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
@@ -34,8 +34,8 @@ index 06f4c5ae1..7b20a2318 100644
 +	read_result = ksys_read(fd, buf, count);
 +	
 +	// check sys_read return value and errno to check if it blocks
-+	if (read_result != -EAGAIN) {
-+		if (read_result < 0) printk("read_epoll_ctl sys_read returns unhandled error!\n");
++	if (read_result != -EAGAIN && read_result != -EWOULDBLOCK) {
++		// if (read_result < 0) printk("read_epoll_ctl sys_read returns unhandled error!\n");
 +		return read_result;
 +	}
 +	

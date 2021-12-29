@@ -103,6 +103,13 @@ int main(void) {
 			epfd, EPOLL_CTL_ADD, &event);
 	assert_retval(retval, -1, EINVAL, "read_epoll_ctl");
 	
+	// read returns EBADF (fd is not valid)
+	reset(1);
+	retval = read_epoll_ctl(1000, buffer, sizeof(buffer), // assume fd 1000 is not used (maybe should do better)
+			epfd, EPOLL_CTL_ADD, &event);
+	assert_retval(retval, -1, EBADF, "read_epoll_ctl");
+	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
+	assert_retval(retval, 0, 0, "epoll_ctl_try_add"); // should not already been added
 
 	// read doesn't block, epoll_ctl not executed
 	reset(1);
@@ -111,7 +118,9 @@ int main(void) {
 	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
 			epfd, EPOLL_CTL_ADD, &event);
 	printf("buffer is %s\n", buffer);
-	assert_retval(retval, DATASZ, 0,"read_epoll_ctl");
+	assert_retval(retval, DATASZ, 0, "read_epoll_ctl");
+	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
+	assert_retval(retval, 0, 0, "epoll_ctl_try_add"); // should not already been added
 	
 	// read blocks, epoll_ctl executed
 	reset(1);
@@ -119,7 +128,15 @@ int main(void) {
 			epfd, EPOLL_CTL_ADD, &event);
 	assert_retval(retval, 0, 0, "read_epoll_ctl");
 	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
-	assert_retval(retval, -1, EEXIST, "epoll_ctl_try_add");
+	assert_retval(retval, -1, EEXIST, "epoll_ctl_try_add"); // should already been added
+
+	// read blocks, epoll_ctl executed but EBADF (epfd is not valid)
+	reset(1);
+	retval = read_epoll_ctl(accept_fd, buffer, sizeof(buffer),
+			1000, EPOLL_CTL_ADD, &event); // assume fd 1000 is not used (maybe should do better)
+	assert_retval(retval, -1, EBADF, "read_epoll_ctl");
+	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
+	assert_retval(retval, 0, 0, "epoll_ctl_try_add"); // should not already been added
 
 	// cleanup
 	close(connect_fd);
