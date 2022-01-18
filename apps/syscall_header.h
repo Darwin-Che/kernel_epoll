@@ -2,9 +2,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#define __NR_read_epoll_ctl 548
-#define read_epoll_ctl(...) \
-	syscall(__NR_read_epoll_ctl, \
+#define __NR_recv_epoll_add 548
+#define recv_epoll_add(...) \
+	syscall(__NR_recv_epoll_add, \
 			__VA_ARGS__)
 
 
