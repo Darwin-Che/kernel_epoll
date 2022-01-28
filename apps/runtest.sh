@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TESTLIST="sanity"
+TESTLIST="recv recvfrom recvmsg"
 
 for t in $TESTLIST; do
 	echo "RUNNING TEST [$t]"

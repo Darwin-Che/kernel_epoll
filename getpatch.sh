@@ -1,6 +1,6 @@
 #!/bin/bash
 
-patch_name='recv_epoll_add'
+patch_name='epoll_memo'
 
 if [[ $# -ne 0 ]]; then
 	patch_name=$1

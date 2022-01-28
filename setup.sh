@@ -76,17 +76,21 @@ popd
 # chmod 777 buildroot/overlay/etc/init.d/myinit
 # echo "done!"
 
+if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
+	echo -n -e "Building buildroot toolchain..."
+	pushd buildroot
+	CC="ccache gcc" make -j$((2*$(nproc))) # &> /tmp/br_compile.log
+	echo "done! (log at /tmp/br_recompile.log)"
+	popd
+fi
+
 echo -n -e "Compiling user space app... \t\t\t"
 mkdir -p buildroot/overlay/root
 rm buildroot/overlay/root/*
-cp apps/* buildroot/overlay/root/
-for f in buildroot/overlay/root/*.c; do
-	./buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc $f -o ${f%.c};
-	if [[ $? -ne 0 ]]; then
-		echo "Compiling user space app fail"
-		exit 1
-	fi
-done
+pushd apps
+make
+popd
+cp apps/bin/* buildroot/overlay/root/
 echo "done!"
 
 pushd buildroot

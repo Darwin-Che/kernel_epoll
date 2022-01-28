@@ -1,3 +1,6 @@
 buildroot
 linux
+apps/bin
+apps/*.o
+
 
