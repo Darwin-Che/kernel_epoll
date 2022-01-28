@@ -4,40 +4,19 @@ Download kernel source from https://www.kernel.org/. This implementation uses th
 
 Download kernel build tool `git clone https://github.com/buildroot/buildroot.git`.
 
-# New syscall
-
-syscall number: `548`
-
-syscall name: `recv_epoll_add(int fd, void *buf, size_t count, unsigned flags, int epfd, struct epoll_event *event)`
-
-syscall param: 
+# Modified syscall
 
 ```
-int fd -> the socket fd
-void * buf -> the buffer for recv
-size_t count -> the size of buf
-unsigned flags -> recv flags
-int epfd -> the epoll fd
-struct epoll_event * event -> the epoll_ctl event
+int epoll_ctl(int epfd, EPOLL_CTL_MEMO, int fd, struct epoll_event *event)
 ```
 
-syscall effects:
+## syscall effects:
 
-1) assert that `fd` is in `O_NONBLOCK` mode.
+Register the parameters with the `struct file` related to `fd`. Then these parameters with `EPOLL_CTL_ADD` will be invoked in the following conditions:
 
-2) try `recv(fd, buf, count, flags)`, if the result is not `EAGAIN` or `EWOULDBLOCK`, then proceed to return the results.
+- syscalls `recv`, `recvfrom`, `recvmsg` are invoked on `fd`
 
-3) otherwise, perform `epoll_ctl(epfd, EPOLL_CTL_ADD, fd, event)`, and return the results. 
+- the invoked syscall returns `EAGAIN` or `EWOULDBLOCK`
 
-syscall return values:
-
-1) If `fd` is not in `O_NONBLOCK` mode, return $-1$, and `errno = EINVAL`.
-
-2) If `recv` success, then return the number of bytes read into buf, which should be non-negative.
-
-3) If `recv` fails but not `EAGAIN` or `EWOULDBLOCK`, then return $-1$ and `errno` is set by `recv` correspondingly.
-
-4) If `recv` returns `EAGAIN` or `EWOULDBLOCK`, and `epoll_ctl` success, returns $0$.
-
-5) If `recv` returns `EAGAIN` or `EWOULDBLOCK`, and `epoll_ctl` fails, returns $-1$ and `errno` is set by `epoll_ctl` correspondingly.
-
+If the conditions are met, then the return value of the syscall (including `errno`) will be the result of 
+`epoll_ctl` invoked with the registered parameters.
