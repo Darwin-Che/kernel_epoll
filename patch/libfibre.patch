@@ -1,0 +1,64 @@
+diff --git a/src/libfibre/EventScope.h b/src/libfibre/EventScope.h
+index 81c600e..24e3e76 100644
+--- a/src/libfibre/EventScope.h
++++ b/src/libfibre/EventScope.h
+@@ -163,7 +163,7 @@ class EventScope {
+   T syncIO( T (*iofunc)(int, Args...), int fd, Args... a) {
+     T ret;
+     static const Poller::Direction direction = Input ? Poller::Input : Poller::Output;
+-#if TESTING_EVENTPOLL_ONESHOT
++#if TESTING_EVENTPOLL_ONESHOT || TESTING_EVENTPOLL_MEMO
+     static const Poller::Variant variant = Input ? Poller::Oneshot : Poller::Oneshot;
+ #elif TESTING_EVENTPOLL_LEVEL
+     static const Poller::Variant variant = Input ? Poller::Level : Poller::Oneshot;
+@@ -177,6 +177,12 @@ class EventScope {
+     if (!Input && tryIO<Input>(ret, iofunc, fd, a...)) return ret;
+ #endif
+     BasePoller*& poller = fdSyncVector[fd].poller[Input];
++#if TESTING_EVENTPOLL_MEMO
++    if (Input && !poller) {
++      poller = &getPoller<Input,Cluster>(fd);
++      poller->setupFD(fd, static_cast<Poller::Operation>(static_cast<int>(Poller::Create) | static_cast<int>(Poller::Memo)), direction, variant);
++    } else if (Input) {} else
++#endif
+     if (!poller) {
+       poller = &getPoller<Input,Cluster>(fd);
+       poller->setupFD(fd, Poller::Create, direction, variant);
+@@ -187,6 +193,9 @@ class EventScope {
+     for (;;) {
+       if (variant == Poller::Level) sync.wait(); else sync.P();
+       if (tryIO<Input>(ret, iofunc, fd, a...)) return ret;
++#if TESTING_EVENTPOLL_MEMO
++      if (Input) {} else
++#endif
+       if (variant == Poller::Oneshot) {
+         poller->setupFD(fd, Poller::Modify, direction, variant);
+       }
+diff --git a/src/libfibre/Poller.h b/src/libfibre/Poller.h
+index fa260ca..1c02907 100644
+--- a/src/libfibre/Poller.h
++++ b/src/libfibre/Poller.h
+@@ -44,7 +44,7 @@ struct Poller {
+   enum Variant   : ssize_t { Level = 0, Edge = EV_CLEAR, Oneshot = EV_ONESHOT };
+ #else // __linux__ below
+   typedef epoll_event   EventType; // man 2 epoll_ctl: EPOLLERR, EPOLLHUP not needed
+-  enum Operation : ssize_t { Create = EPOLL_CTL_ADD, Modify = EPOLL_CTL_MOD, Remove = EPOLL_CTL_DEL };
++  enum Operation : ssize_t { Create = EPOLL_CTL_ADD, Modify = EPOLL_CTL_MOD, Remove = EPOLL_CTL_DEL, Memo = EPOLL_CTL_MEMO };
+   enum Direction : ssize_t { Input = EPOLLIN | EPOLLPRI | EPOLLRDHUP, Output = EPOLLOUT };
+   enum Variant   : ssize_t { Level = 0, Edge = EPOLLET, Oneshot = EPOLLONESHOT };
+ #endif
+diff --git a/src/runtime-glue/testoptions.h.default b/src/runtime-glue/testoptions.h.default
+index 4bb7c3e..34ade9f 100644
+--- a/src/runtime-glue/testoptions.h.default
++++ b/src/runtime-glue/testoptions.h.default
+@@ -6,7 +6,9 @@
+ #define TESTING_CLUSTER_POLLER_FIBRE  1 // per-cluster poller(s): fibre vs. pthread
+ #define TESTING_CLUSTER_POLLER_FLOAT  1 // per-cluster poller fibres(s): float vs. background
+ #define TESTING_IO_TRYFIRST           1 // try nonblocking I/O operation first
+-#define TESTING_EVENTPOLL_ONESHOT     1 // use oneshot event polling
++#define TESTING_EVENTPOLL_MEMO        1
++#define EPOLL_CTL_MEMO                2048
++//#define TESTING_EVENTPOLL_ONESHOT     1 // use oneshot event polling
+ //#define TESTING_EVENTPOLL_LEVEL       1 // use level-trigger event polling
+ //#define TESTING_POLLER_FIBRE_SPIN 65536 // poller fibre: spin loop of NB polls
+ 

@@ -36,6 +36,13 @@ int main(void) {
 	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
 	assert_retval(retval, -1, EEXIST, "epoll_ctl_try_add"); // should already been added
 
+	// recv blocks, epoll_memo executed
+	//reset();
+	retval = recv(accept_fd, buffer, sizeof(buffer), 0);
+	assert_retval(retval, 0, 0, "read_epoll_ctl");
+	retval = epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event);
+	assert_retval(retval, -1, EEXIST, "epoll_ctl_try_add"); // should already been added
+
 	// recv blocks, epoll_memo executed, epfd not valid
 	//
 

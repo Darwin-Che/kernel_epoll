@@ -65,17 +65,6 @@ fi
 echo "done!"
 popd
 
-# echo -n -e "Adding init scripts... \t\t\t"
-# mkdir -p buildroot/overlay/etc/init.d
-# cp buildroot/output/target/etc/init.d/* buildroot/overlay/etc/init.d/
-# cat << EOT > buildroot/overlay/etc/init.d/myinit
-# for i in /root/*.c; do
-# 	gcc $i -o ${i%.c};
-# done
-# EOT
-# chmod 777 buildroot/overlay/etc/init.d/myinit
-# echo "done!"
-
 if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	echo -n -e "Building buildroot toolchain..."
 	pushd buildroot
@@ -84,13 +73,30 @@ if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	popd
 fi
 
+export PATH="$(realpath buildroot/output/host/bin):$PATH"
+
 echo -n -e "Compiling user space app... \t\t\t"
 mkdir -p buildroot/overlay/root
-rm buildroot/overlay/root/*
-pushd apps
-make
+rm -rf buildroot/overlay/root/*
+pushd apps/sanity
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ make all
 popd
-cp apps/bin/* buildroot/overlay/root/
+pushd apps/libfibre
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ make all
+popd
+cp -r apps/* buildroot/overlay/root/
+echo "done!"
+
+echo -n -e "Adding init scripts... \t\t\t"
+mkdir -p buildroot/overlay/etc/
+rm -rf buildroot/overlay/etc/*
+cp buildroot/output/target/etc/profile buildroot/overlay/etc/profile
+cat << EOT >> buildroot/overlay/etc/profile
+
+export LD_LIBRARY_PATH="/root/libfibre/src:\$LD_LIBRARY_PATH"
+
+EOT
+chmod 777 buildroot/overlay/etc/profile
 echo "done!"
 
 pushd buildroot

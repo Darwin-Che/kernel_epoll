@@ -1,5 +1,3 @@
-CC := ../buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc
-
 TESTLIST = recv recvfrom recvmsg
 
 .PHONY : all clean
@@ -7,7 +5,7 @@ TESTLIST = recv recvfrom recvmsg
 all : bin/runtest.sh $(patsubst %, bin/%, $(TESTLIST))
 
 clean : 
-	rm -f bin/*
+	rm -f bin/* *.o
 
 bin/% : %.o common.o
 	${CC} $^ -o $@

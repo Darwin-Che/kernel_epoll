@@ -1,6 +1,6 @@
 buildroot
 linux
-apps/bin
-apps/*.o
-
+apps/*/bin
+apps/*/*.o
+apps/libfibre
 
