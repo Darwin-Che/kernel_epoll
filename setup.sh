@@ -1,28 +1,44 @@
 #!/bin/bash
 
-CONFIG_SMP=1
-CONFIG_MEM=1024
+CF_SMP=3
+CF_MEM=1024
 
-CONFIG_RUN=1
-CONFIG_BUILD=1
+CF_INSTALL=0
+CF_BUILDROOT=0
+CF_KERNEL=0
+CF_RUN=1
 
-while getopts "rbds" arg; do
-	case $arg in
-		r) 
-			CONFIG_RUN=0
-			echo "only build -----"
-			;;
-		b) 
-			CONFIG_BUILD=0
-			echo "only download ----"
-			;;
-		d) 
-			CONFIG_RUN=2
-			echo "enable debug ----"
-			;;
-	esac
-done
+if [[ $# -ne 0 ]]; then 
+
+	CF_INSTALL=0
+	CF_BUILDROOT=0
+	CF_KERNEL=0
+	CF_RUN=0
+	
+	while getopts "ibcr" arg; do
+		case $arg in
+			i) 
+				CF_INSTALL=1
+				echo "Activate Install"
+				;;
+			b) 
+				CF_BUILDROOT=1
+				echo "Activate Recompile Buildroot"
+				;;
+			c) 
+				CF_KERNEL=1
+				echo "Activate Recompile Kernel"
+				;;
+			r) 
+				CF_RUN=1
+				echo "Activate Run"
+				;;
+		esac
+	done
+
+fi
 			
+function install_buildroot {
 
 echo  -e "Fetching buildroot source... \t\t\t"
 if [[ -d buildroot ]]; then
@@ -30,6 +46,10 @@ if [[ -d buildroot ]]; then
 else
 	git clone https://github.com/buildroot/buildroot.git
 fi
+
+}
+
+function install_kernel {
 
 echo  -e "Fetching kernel 5.15.11 ... \t\t\t"
 if [[ -d linux ]]; then
@@ -55,6 +75,10 @@ if [[ ${CONFIG_BUILD} -eq 0 ]]; then
 	exit 0
 fi
 
+}
+
+function compile_kernel {
+
 echo -n -e "Compiling kernel... \t\t\t\t"
 pushd linux
 CC="ccache gcc" make -j$((2*$(nproc)))
@@ -65,6 +89,10 @@ fi
 echo "done!"
 popd
 
+}
+
+function compile_toolchain {
+
 if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	echo -n -e "Building buildroot toolchain..."
 	pushd buildroot
@@ -72,6 +100,10 @@ if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	echo "done! (log at /tmp/br_recompile.log)"
 	popd
 fi
+
+}
+
+function compile_apps {
 
 export PATH="$(realpath buildroot/output/host/bin):$PATH"
 
@@ -87,6 +119,10 @@ popd
 cp -r apps/* buildroot/overlay/root/
 echo "done!"
 
+}
+
+function add_LD_PATH {
+
 echo -n -e "Adding init scripts... \t\t\t"
 mkdir -p buildroot/overlay/etc/
 rm -rf buildroot/overlay/etc/*
@@ -99,36 +135,73 @@ EOT
 chmod 777 buildroot/overlay/etc/profile
 echo "done!"
 
+}
+
+function compile_final_buildroot {
+
 pushd buildroot
 echo -n -e "Building rootfs image... \t\t\t"
 CC="ccache gcc" make -j$((2*$(nproc))) # &> /tmp/br_compile.log
 echo "done! (log at /tmp/br_recompile.log)"
 popd
 
-# just run
-if [[ ${CONFIG_RUN} -eq 1 ]]; then
-	qemu-system-x86_64 \
+}
+
+
+function run_qemu {
+
+qemu-system-x86_64 \
 		-kernel linux/arch/x86/boot/bzImage \
 		-boot c \
-		-smp ${CONFIG_SMP} \
-		-m ${CONFIG_MEM} \
+		-smp ${CF_SMP} \
+		-m ${CF_MEM} \
 		-drive file=buildroot/output/images/rootfs.ext4,format=raw \
 		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
 		-serial stdio \
 		-display none
-fi
 
-if [[ ${CONFIG_RUN} -eq 2 ]]; then
-	tmux split-window -h "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
-	qemu-system-x86_64 \
+}
+
+function debug_qemu {
+
+tmux split-window -h "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
+qemu-system-x86_64 \
 		-s -S \
 		-kernel linux/arch/x86/boot/bzImage \
 		-boot c \
-		-smp ${CONFIG_SMP} \
-		-m ${CONFIG_MEM} \
+		-smp ${CF_SMP} \
+		-m ${CF_MEM} \
 		-drive file=buildroot/output/images/rootfs.ext4,format=raw \
 		-append "root=/dev/sda rw console=ttyS0,115200 acpi=off nokaslr" \
 		-serial stdio \
 		-display none
+
+}
+
+# ========================================================================
+# ========================================================================
+# ========================================================================
+
+if [[ $CF_INSTALL = 1 ]]; then
+	install_kernel
+	install_buildroot
 fi
+
+if [[ $CF_KERNEL = 1 ]]; then
+	compile_kernel
+fi
+
+if [[ $CF_BUILDROOT = 1 ]]; then
+	compile_toolchain
+	compile_apps
+	add_LD_PATH
+	compile_final_buildroot
+fi
+
+if [[ $CF_RUN = 1 ]]; then
+	stty intr ^]
+	run_qemu
+	stty intr ^C
+fi
+
 

@@ -1,5 +1,5 @@
 diff --git a/src/libfibre/EventScope.h b/src/libfibre/EventScope.h
-index 81c600e..24e3e76 100644
+index 81c600e..a0da745 100644
 --- a/src/libfibre/EventScope.h
 +++ b/src/libfibre/EventScope.h
 @@ -163,7 +163,7 @@ class EventScope {
@@ -11,25 +11,27 @@ index 81c600e..24e3e76 100644
      static const Poller::Variant variant = Input ? Poller::Oneshot : Poller::Oneshot;
  #elif TESTING_EVENTPOLL_LEVEL
      static const Poller::Variant variant = Input ? Poller::Level : Poller::Oneshot;
-@@ -177,6 +177,12 @@ class EventScope {
+@@ -177,6 +177,14 @@ class EventScope {
      if (!Input && tryIO<Input>(ret, iofunc, fd, a...)) return ret;
  #endif
      BasePoller*& poller = fdSyncVector[fd].poller[Input];
 +#if TESTING_EVENTPOLL_MEMO
 +    if (Input && !poller) {
 +      poller = &getPoller<Input,Cluster>(fd);
-+      poller->setupFD(fd, static_cast<Poller::Operation>(static_cast<int>(Poller::Create) | static_cast<int>(Poller::Memo)), direction, variant);
++      poller->setupFD(fd, static_cast<Poller::Operation>(
++          static_cast<int>(Poller::Create) | static_cast<int>(Poller::Memo)
++        ), direction, variant);
 +    } else if (Input) {} else
 +#endif
      if (!poller) {
        poller = &getPoller<Input,Cluster>(fd);
        poller->setupFD(fd, Poller::Create, direction, variant);
-@@ -187,6 +193,9 @@ class EventScope {
+@@ -187,6 +195,9 @@ class EventScope {
      for (;;) {
        if (variant == Poller::Level) sync.wait(); else sync.P();
        if (tryIO<Input>(ret, iofunc, fd, a...)) return ret;
 +#if TESTING_EVENTPOLL_MEMO
-+      if (Input) {} else
++		if (Input) {} else
 +#endif
        if (variant == Poller::Oneshot) {
          poller->setupFD(fd, Poller::Modify, direction, variant);

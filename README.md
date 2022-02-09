@@ -25,7 +25,15 @@ Register the parameters in the `struct file` of `fd`. Then these parameters with
 
 - the invoked syscall returns `EAGAIN` or `EWOULDBLOCK`
 
-- `fd` is not already registered in `epfd`
+If these conditions are met, then proceed to `do_epoll_memo` which have 3 cases:
 
-If these conditions are met, then the return value of the syscall (including `errno`) will be the result of 
-`epoll_ctl` invoked with the registered parameters.
+- If `fd` is not already registered in `epfd`, then execute `err = epoll_ctl(epfd, EPOLL_CTL_ADD, fd, event)`
+
+- Else If `fd` is deactivated after `ONESHOT`, then execute `err = epoll_ctl(epfd, EPOLL_CTL_MOD, fd, event)`
+
+- Otherwise do nothing
+
+The return value and errno of the syscalls will be `err ? : err`, 
+i.e. if `epoll_ctl` fails, then the return value is the failure, 
+otherwise, return `EAGAIN` or `EWOULDBLOCK`.
+
