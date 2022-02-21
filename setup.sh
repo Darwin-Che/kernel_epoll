@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CF_SMP=3
+CF_SMP=6
 CF_MEM=1024
 
 CF_INSTALL=0
@@ -15,7 +15,7 @@ if [[ $# -ne 0 ]]; then
 	CF_KERNEL=0
 	CF_RUN=0
 	
-	while getopts "ibcr" arg; do
+	while getopts "ibkrd" arg; do
 		case $arg in
 			i) 
 				CF_INSTALL=1
@@ -25,7 +25,7 @@ if [[ $# -ne 0 ]]; then
 				CF_BUILDROOT=1
 				echo "Activate Recompile Buildroot"
 				;;
-			c) 
+			k) 
 				CF_KERNEL=1
 				echo "Activate Recompile Kernel"
 				;;
@@ -33,11 +33,30 @@ if [[ $# -ne 0 ]]; then
 				CF_RUN=1
 				echo "Activate Run"
 				;;
+			d) 
+				CF_RUN=2
+				echo "Activate Debug"
+				;;
 		esac
 	done
 
+	read
 fi
-			
+
+function install_libfibre {
+
+echo -e "Fetching libfibre source... \t\t\t"
+mkdir -p apps
+pushd apps
+if [[ -d libfibre ]]; then
+	echo "done!"
+else 
+	git clone https://git.uwaterloo.ca/mkarsten/libfibre.git
+fi
+popd
+
+}
+
 function install_buildroot {
 
 echo  -e "Fetching buildroot source... \t\t\t"
@@ -182,9 +201,11 @@ qemu-system-x86_64 \
 # ========================================================================
 # ========================================================================
 
+
 if [[ $CF_INSTALL = 1 ]]; then
 	install_kernel
 	install_buildroot
+	install_libfibre
 fi
 
 if [[ $CF_KERNEL = 1 ]]; then
@@ -204,4 +225,9 @@ if [[ $CF_RUN = 1 ]]; then
 	stty intr ^C
 fi
 
+if [[ $CF_RUN = 2 ]]; then
+	stty intr ^]
+	debug_qemu
+	stty intr ^C
+fi
 
