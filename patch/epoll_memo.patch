@@ -1,5 +1,5 @@
 diff --git a/fs/eventpoll.c b/fs/eventpoll.c
-index 06f4c5ae1..25bea396c 100644
+index 06f4c5ae1..1d348e838 100644
 --- a/fs/eventpoll.c
 +++ b/fs/eventpoll.c
 @@ -234,6 +234,12 @@ struct ep_pqueue {
@@ -144,11 +144,11 @@ index 06f4c5ae1..25bea396c 100644
  		return -EFAULT;
  
 -	return do_epoll_ctl(epfd, op, fd, &epds, false);
-+	if (op & ~EPOLL_CTL_MEMO) {
-+		err = do_epoll_ctl(epfd, op & ~EPOLL_CTL_MEMO, fd, &epds, false);
-+	}
 +	if (op & EPOLL_CTL_MEMO) {
 +		err = do_epoll_memo_init(epfd, fd, &epds, false);
++	}
++	if (op & ~EPOLL_CTL_MEMO) {
++		err = do_epoll_ctl(epfd, op & ~EPOLL_CTL_MEMO, fd, &epds, false);
 +	}
 +
 +	return err;

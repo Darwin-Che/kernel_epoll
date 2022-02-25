@@ -60,20 +60,19 @@ popd
 function install_buildroot {
 
 echo  -e "Fetching buildroot source... \t\t\t"
-if [[ -d buildroot ]]; then
-	echo "done!"
-else
+if [[ ! -d buildroot ]]; then
 	git clone https://github.com/buildroot/buildroot.git
 fi
+echo "cp conf/buildroot.config buildroot/.config"
+cp conf/buildroot.config buildroot/.config
+echo "done!"
 
 }
 
 function install_kernel {
 
 echo  -e "Fetching kernel 5.15.11 ... \t\t\t"
-if [[ -d linux ]]; then
-	echo "done!"
-else
+if [[ ! -d linux ]]; then
 	echo  -e "\tstart download ... \t\t\t"
 	curl "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.15.11.tar.xz" --output "linux-5.15.11.tar.xz"
 	echo  -e "\tdownload complete ... \t\t\t"
@@ -82,17 +81,10 @@ else
 	mv "linux-5.15.11" "linux"
 	echo  -e "\tunzip complete ... \t\t\t"
 	rm "linux-5.15.11.tar.xz"
-	pushd linux
-	git init
-	git add .
-	git commit -m "init"
-	popd
 fi
-
-if [[ ${CONFIG_BUILD} -eq 0 ]]; then
-	echo "donwload done!"
-	exit 0
-fi
+echo "cp conf/linux.config linux/.config"
+cp conf/linux.config linux/.config
+echo "done!"
 
 }
 

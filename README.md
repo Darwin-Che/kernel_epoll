@@ -1,10 +1,26 @@
 # Setup
 
-Download kernel source from https://www.kernel.org/. This implementation uses the most recent stable version 5.15.11.
+Step 0: The required softwares are `qemu git fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison`. `apt install` them if not installed. 
 
-Download kernel build tool `git clone https://github.com/buildroot/buildroot.git`.
+Step 1: `./setup -i` to download and prepare the env and source code for 'kernel', 'buildroot', and 'libfibre'.
 
-Download libfibre from `git clone https://git.uwaterloo.ca/mkarsten/libfibre.git`, place it in `apps/`.
+Step 2 (optional): Initialize an empty repo at `linux/` to track the the source code of the kernel.
+
+Step 3: `./setup -k` to build the source code under `linux/`.
+
+Step 4: `./setup -b` to build the source code under `buildroot/` (toolchain and rootfs) and `apps/`.
+
+Step 5: `./setup -r` to run the qemu with the unmodified kernel and unmodified libfibre.
+
+Step 6: `./usepatch lx` to apply the patch to the kernel.
+
+Step 7: `./usepatch fb` to apply the patch to the libfibre.
+
+Step 8: `./setup -kbr` to rebuild the kernel and libfibre, then run the qemu for the modified kernel and libfibre
+
+Step 9: `./usepatch lx -R` to undo the patch to the kernel.
+
+Step 10: `./usepatch fb -R` to undo the patch to the libfibre.
 
 # Modified syscall
 
@@ -17,7 +33,7 @@ int epoll_ctl(int epfd, EPOLL_CTL_ADD | EPOLL_CTL_MEMO, int fd, struct epoll_eve
 
 ## syscall effects:
 
-If `EPOLL_CTL_ADD` is present, then do it before memo. 
+If `EPOLL_CTL_ADD` is present, then will perform it after `EPOLL_CTL_MEMO`. 
 
 Register the parameters in the `struct file` of `fd`. Then these parameters with `EPOLL_CTL_ADD` will be invoked in the following conditions:
 
