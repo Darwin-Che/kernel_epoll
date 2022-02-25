@@ -8,6 +8,7 @@ if [[ $# > 0 ]]; then
 	numcon=$1
 fi
 
-# echotest -a 0.0.0.0 -c $numcon -p 8888 -s > server.out & echotest -a 0.0.0.0 -c $numcon -p 8888
-echotest -a 0.0.0.0 -c $numcon -p 8888 & echotest -a 0.0.0.0 -c $numcon -p 8888 -s
+echotest -a 0.0.0.0 -c $numcon -p 8888 -s &
+sleep 0.01
+echotest -a 0.0.0.0 -c $numcon -p 8888
 
