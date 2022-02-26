@@ -92,7 +92,7 @@ function compile_kernel {
 
 echo -n -e "Compiling kernel... \t\t\t\t"
 pushd linux
-CC="ccache gcc" make -j$((2*$(nproc)))
+CC="ccache gcc" make -j$(nproc)
 if [[ $? -ne 0 ]]; then 
 	echo "Compiling kernel fail"
 	exit 0
@@ -107,7 +107,7 @@ function compile_toolchain {
 if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	echo -n -e "Building buildroot toolchain..."
 	pushd buildroot
-	CC="ccache gcc" make -j$((2*$(nproc))) # &> /tmp/br_compile.log
+	CC="ccache gcc" make -j$(nproc) # &> /tmp/br_compile.log
 	echo "done! (log at /tmp/br_recompile.log)"
 	popd
 fi
@@ -152,7 +152,7 @@ function compile_final_buildroot {
 
 pushd buildroot
 echo -n -e "Building rootfs image... \t\t\t"
-CC="ccache gcc" make -j$((2*$(nproc))) # &> /tmp/br_compile.log
+CC="ccache gcc" make -j$(nproc) # &> /tmp/br_compile.log
 echo "done! (log at /tmp/br_recompile.log)"
 popd
 

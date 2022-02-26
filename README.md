@@ -2,25 +2,25 @@
 
 Step 0: The required softwares are `qemu git fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison`. `apt install` them if not installed. 
 
-Step 1: `./setup -i` to download and prepare the env and source code for 'kernel', 'buildroot', and 'libfibre'.
+Step 1: `./setup.sh -i` to download and prepare the env and source code for 'kernel', 'buildroot', and 'libfibre'.
 
 Step 2 (optional): Initialize an empty repo at `linux/` to track the the source code of the kernel.
 
-Step 3: `./setup -k` to build the source code under `linux/`.
+Step 3: `./setup.sh -k` to build the source code under `linux/`.
 
-Step 4: `./setup -b` to build the source code under `buildroot/` (toolchain and rootfs) and `apps/`.
+Step 4: `./setup.sh -b` to build the source code under `buildroot/` (toolchain and rootfs) and `apps/`.
 
-Step 5: `./setup -r` to run the qemu with the unmodified kernel and unmodified libfibre.
+Step 5: `./setup.sh -r` to run the qemu with the unmodified kernel and unmodified libfibre.
 
-Step 6: `./usepatch lx` to apply the patch to the kernel.
+Step 6: `./usepatch.sh lx` to apply the patch to the kernel.
 
-Step 7: `./usepatch fb` to apply the patch to the libfibre.
+Step 7: `./usepatch.sh fb` to apply the patch to the libfibre.
 
-Step 8: `./setup -kbr` to rebuild the kernel and libfibre, then run the qemu for the modified kernel and libfibre
+Step 8: `./setup.sh -kbr` to rebuild the kernel and libfibre, then run the qemu for the modified kernel and libfibre
 
-Step 9: `./usepatch lx -R` to undo the patch to the kernel.
+Step 9: `./usepatch.sh lx -R` to undo the patch to the kernel.
 
-Step 10: `./usepatch fb -R` to undo the patch to the libfibre.
+Step 10: `./usepatch.sh fb -R` to undo the patch to the libfibre.
 
 # Modified syscall
 
