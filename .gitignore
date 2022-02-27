@@ -3,4 +3,5 @@ linux
 apps/*/bin
 apps/*/*.o
 apps/libfibre
+apps/liburing
 

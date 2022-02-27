@@ -53,6 +53,11 @@ if [[ -d libfibre ]]; then
 else 
 	git clone https://git.uwaterloo.ca/mkarsten/libfibre.git
 fi
+if [[ -d liburing ]]; then
+	echo "done!"
+else
+	git clone https://github.com/axboe/liburing.git
+fi
 popd
 
 }
@@ -118,17 +123,34 @@ function compile_apps {
 
 export PATH="$(realpath buildroot/output/host/bin):$PATH"
 
-echo -n -e "Compiling user space app... \t\t\t"
+echo -n -e "Copying apps to overlay... \t\t\t"
 mkdir -p buildroot/overlay/root
 rm -rf buildroot/overlay/root/*
-pushd apps/sanity
-CC=x86_64-linux-cc CXX=x86_64-linux-g++ make all
-popd
-pushd apps/libfibre
-CC=x86_64-linux-cc CXX=x86_64-linux-g++ make all
-popd
 cp -r apps/* buildroot/overlay/root/
 echo "done!"
+
+echo -n -e "Compiling liburing... \t\t\t"
+pushd buildroot/overlay/root/liburing
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ ./configure \
+	--includedir=$(realpath ../libfibre/src) \
+	--libdir=$(realpath ../libfibre/src) \
+	--libdevdir=$(realpath ../libfibre/src)
+pushd src
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ make install
+popd
+popd
+echo "done!"
+
+pushd buildroot/overlay/root/libfibre
+ls -l .
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ \
+	LIBS='-luring' \
+	make all
+popd
+pushd buildroot/overlay/root/sanity
+CC=x86_64-linux-cc CXX=x86_64-linux-g++ \
+	make all
+popd
 
 }
 

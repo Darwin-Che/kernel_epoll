@@ -22,6 +22,12 @@ Step 9: `./usepatch.sh lx -R` to undo the patch to the kernel.
 
 Step 10: `./usepatch.sh fb -R` to undo the patch to the libfibre.
 
+## Key Control
+
+Sometimes the script pauses, press Enter to continue or Ctrl-C to abort.
+
+Inside qemu, press Ctrl-C to kill the process inside qemu, and press Ctrl-] to kill qemu itself. 
+
 # Modified syscall
 
 ```
