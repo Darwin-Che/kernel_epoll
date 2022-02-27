@@ -142,7 +142,6 @@ popd
 echo "done!"
 
 pushd buildroot/overlay/root/libfibre
-ls -l .
 CC=x86_64-linux-cc CXX=x86_64-linux-g++ \
 	LIBS='-luring' \
 	make all
