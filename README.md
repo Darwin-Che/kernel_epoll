@@ -1,6 +1,6 @@
 # Setup
 
-Step 0: The required softwares are `qemu git fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison`. `apt install` them if not installed. 
+Step 0: The required softwares are `unzip qemu git fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison`. `apt install` them if not installed. 
 
 Step 1: `./setup.sh -i` to download and prepare the env and source code for 'kernel', 'buildroot', and 'libfibre'.
 
