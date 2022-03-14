@@ -8,7 +8,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 if [[ $patch_name = 'lx' ]]; then
-	patch_name='epoll_memo'
+	patch_name='epoll'
 	patch_dir='linux'
 elif [[ $patch_name = 'fb' ]]; then
 	patch_name='libfibre'

@@ -113,6 +113,10 @@ if [[ ! -f "buildroot/output/host/bin/x86_64-buildroot-linux-gnu-gcc" ]]; then
 	echo -n -e "Building buildroot toolchain..."
 	pushd buildroot
 	CC="ccache gcc" make -j$(nproc) # &> /tmp/br_compile.log
+if [[ $? -ne 0 ]]; then 
+	echo "Compiling toolchain fail"
+	exit 0
+fi
 	echo "done! (log at /tmp/br_recompile.log)"
 	popd
 fi
@@ -135,8 +139,16 @@ CC=x86_64-linux-cc CXX=x86_64-linux-g++ ./configure \
 	--includedir=$(realpath ../libfibre/src) \
 	--libdir=$(realpath ../libfibre/src) \
 	--libdevdir=$(realpath ../libfibre/src)
+if [[ $? -ne 0 ]]; then 
+	echo "configure liburing fail"
+	exit 0
+fi
 pushd src
 CC=x86_64-linux-cc CXX=x86_64-linux-g++ make install
+if [[ $? -ne 0 ]]; then 
+	echo "Compiling liburing fail"
+	exit 0
+fi
 popd
 popd
 echo "done!"
@@ -145,10 +157,18 @@ pushd buildroot/overlay/root/libfibre
 CC=x86_64-linux-cc CXX=x86_64-linux-g++ \
 	LIBS='-luring' \
 	make all
+if [[ $? -ne 0 ]]; then 
+	echo "Compiling libfibre fail"
+	exit 0
+fi
 popd
 pushd buildroot/overlay/root/sanity
 CC=x86_64-linux-cc CXX=x86_64-linux-g++ \
 	make all
+if [[ $? -ne 0 ]]; then 
+	echo "Compiling sanity fail"
+	exit 0
+fi
 popd
 
 }

@@ -1,7 +1,7 @@
 buildroot
 linux
-apps/*/bin
-apps/*/*.o
+apps/sanity/*
 apps/libfibre
 apps/liburing
+!apps/sanity/*.c
 

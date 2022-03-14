@@ -31,31 +31,45 @@ Inside qemu, press Ctrl-C to kill the process inside qemu, and press Ctrl-] to k
 # Modified syscall
 
 ```
-#define EPOLL_CTL_MEMO 2048
+#define EPOLL_CTL_ONDEMAND 2048
 
-int epoll_ctl(int epfd, EPOLL_CTL_MEMO, int fd, struct epoll_event *event)
-int epoll_ctl(int epfd, EPOLL_CTL_ADD | EPOLL_CTL_MEMO, int fd, struct epoll_event *event)
+int epoll_ctl(int epfd, EPOLL_CTL_ADD | EPOLL_CTL_ONDEMAND, int fd, struct epoll_event *event)
 ```
 
 ## syscall effects:
 
-If `EPOLL_CTL_ADD` is present, then will perform it after `EPOLL_CTL_MEMO`. 
+With `EPOLL_CTL_ADD | EPOLL_CTL_ONDEMAND` in `epoll_ctl()`, the `event->events` is saved separated for use in `epoll_modify_ondemand()`.
 
-Register the parameters in the `struct file` of `fd`. Then these parameters with `EPOLL_CTL_ADD` will be invoked in the following conditions:
+The following extra procedure is added to syscalls `accept[4]`, `recv`, `recvfrom`, `recvmsg`:
 
-- syscalls `accept[4]`, `recv`, `recvfrom`, `recvmsg` are invoked on `fd`
+If the invoked syscall returns `EAGAIN` or `EWOULDBLOCK`, then
+each epi in the list registered on this socket will be invoked with `epoll_modify_ondemand()`.
+In this function, if the epi is created with `EPOLL_CTL_ONDEMAND`, and this epi is `EPOLLONESHOT`,
+and this epi is deactivated by `ep_send_events()`,
+then this epi is reactivated by the events stored at creation.
 
-- the invoked syscall returns `EAGAIN` or `EWOULDBLOCK`
+These syscalls will still return `EAGAIN` or `EWOULDBLOCK`.
 
-If these conditions are met, then proceed to `do_epoll_memo` which have 3 cases:
+## `epoll_modify_ondemand()` correctness
 
-- If `fd` is not already registered in `epfd`, then execute `err = epoll_ctl(epfd, EPOLL_CTL_ADD, fd, event)`
+Look at all functions that read/write the `epi->event.events`:
+Read-only: `ep_poll_callback()`, 
+Read-write: `ep_send_events()`, `ep_modify()`, `ep_remove()`
 
-- Else If `fd` is deactivated after `ONESHOT`, then execute `err = epoll_ctl(epfd, EPOLL_CTL_MOD, fd, event)`
+At this stage, ignore `ep_modify()` and `ep_remove()`, assume they never happen concurrently with `ep_modify_ondemand()`.
 
-- Otherwise do nothing
+Since `ep_poll_callback()`'s caller `sock_def_readable()` holds `wq_head->lock` for the callback functions,
+so `ep_poll_callback()` won't overlap with `ep_modify_ondemand()`.
 
-The return value and errno of the syscalls will be `err ? : err`, 
-i.e. if `epoll_ctl` fails, then the return value is the failure, 
-otherwise, return `EAGAIN` or `EWOULDBLOCK`.
+Notice that if `ep_send_events()` deactivates epi, then the related socket will be returned to the Poller, 
+and the socket is bound to a recv call. If this recv call success, then it is intended that this epi is inactive.
+If this recv call fails (in case that another thread fetch the received data before this thread), 
+then `ep_modify_ondemand()` will be invoked again.
+
+In conclusion, after `ep_modify_ondemand()` is invoked, at least one of the things will happen:
+1) epi is active;
+2) recv is called again.
+
+Note: If both of them happen, and the recv succeed, then there is a false active epi for this socket.
+So there will be a wakeup of the Poller if the next data is received while a recv call hasn't been made to this socket.
 

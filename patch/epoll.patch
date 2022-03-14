@@ -1,0 +1,294 @@
+diff --git a/fs/eventpoll.c b/fs/eventpoll.c
+index 06f4c5ae1..2595ac025 100644
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -167,6 +167,9 @@ struct epitem {
+ 
+ 	/* The structure that describe the interested events and the source fd */
+ 	struct epoll_event event;
++
++	/* The stored fields for ep_modify_ondemand */
++	__poll_t ondemand_events;
+ };
+ 
+ /*
+@@ -1463,6 +1466,128 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
+ 	epi->ep = ep;
+ 	ep_set_ffd(&epi->ffd, tfile, fd);
+ 	epi->event = *event;
++	epi->ondemand_events = 0;
++	epi->next = EP_UNACTIVE_PTR;
++
++	if (tep)
++		mutex_lock_nested(&tep->mtx, 1);
++	/* Add the current item to the list of active epoll hook for this file */
++	if (unlikely(attach_epitem(tfile, epi) < 0)) {
++		if (tep)
++			mutex_unlock(&tep->mtx);
++		kmem_cache_free(epi_cache, epi);
++		percpu_counter_dec(&ep->user->epoll_watches);
++		return -ENOMEM;
++	}
++
++	if (full_check && !tep)
++		list_file(tfile);
++
++	/*
++	 * Add the current item to the RB tree. All RB tree operations are
++	 * protected by "mtx", and ep_insert() is called with "mtx" held.
++	 */
++	ep_rbtree_insert(ep, epi);
++	if (tep)
++		mutex_unlock(&tep->mtx);
++
++	/* now check if we've created too many backpaths */
++	if (unlikely(full_check && reverse_path_check())) {
++		ep_remove(ep, epi);
++		return -EINVAL;
++	}
++
++	if (epi->event.events & EPOLLWAKEUP) {
++		error = ep_create_wakeup_source(epi);
++		if (error) {
++			ep_remove(ep, epi);
++			return error;
++		}
++	}
++
++	/* Initialize the poll table using the queue callback */
++	epq.epi = epi;
++	init_poll_funcptr(&epq.pt, ep_ptable_queue_proc);
++
++	/*
++	 * Attach the item to the poll hooks and get current event bits.
++	 * We can safely use the file* here because its usage count has
++	 * been increased by the caller of this function. Note that after
++	 * this operation completes, the poll callback can start hitting
++	 * the new item.
++	 */
++	revents = ep_item_poll(epi, &epq.pt, 1);
++
++	/*
++	 * We have to check if something went wrong during the poll wait queue
++	 * install process. Namely an allocation for a wait queue failed due
++	 * high memory pressure.
++	 */
++	if (unlikely(!epq.epi)) {
++		ep_remove(ep, epi);
++		return -ENOMEM;
++	}
++
++	/* We have to drop the new item inside our item list to keep track of it */
++	write_lock_irq(&ep->lock);
++
++	/* record NAPI ID of new item if present */
++	ep_set_busy_poll_napi_id(epi);
++
++	/* If the file is already "ready" we drop it inside the ready list */
++	if (revents && !ep_is_linked(epi)) {
++		list_add_tail(&epi->rdllink, &ep->rdllist);
++		ep_pm_stay_awake(epi);
++
++		/* Notify waiting tasks that events are available */
++		if (waitqueue_active(&ep->wq))
++			wake_up(&ep->wq);
++		if (waitqueue_active(&ep->poll_wait))
++			pwake++;
++	}
++
++	write_unlock_irq(&ep->lock);
++
++	/* We have to call this outside the lock */
++	if (pwake)
++		ep_poll_safewake(ep, NULL);
++
++	return 0;
++}
++
++/*
++ * create epi with ondemand_events
++ */
++static int ep_insert_ondemand(struct eventpoll *ep, const struct epoll_event *event,
++		     struct file *tfile, int fd, int full_check)
++{
++	int error, pwake = 0;
++	__poll_t revents;
++	struct epitem *epi;
++	struct ep_pqueue epq;
++	struct eventpoll *tep = NULL;
++
++	if (is_file_epoll(tfile))
++		tep = tfile->private_data;
++
++	lockdep_assert_irqs_enabled();
++
++	if (unlikely(percpu_counter_compare(&ep->user->epoll_watches,
++					    max_user_watches) >= 0))
++		return -ENOSPC;
++	percpu_counter_inc(&ep->user->epoll_watches);
++
++	if (!(epi = kmem_cache_zalloc(epi_cache, GFP_KERNEL))) {
++		percpu_counter_dec(&ep->user->epoll_watches);
++		return -ENOMEM;
++	}
++
++	/* Item initialization follow here ... */
++	INIT_LIST_HEAD(&epi->rdllink);
++	epi->ep = ep;
++	ep_set_ffd(&epi->ffd, tfile, fd);
++	epi->event = *event;
++	epi->ondemand_events = (event->events) & ~EP_PRIVATE_BITS; // need to do it before insert into wait queue
+ 	epi->next = EP_UNACTIVE_PTR;
+ 
+ 	if (tep)
+@@ -1627,6 +1752,57 @@ static int ep_modify(struct eventpoll *ep, struct epitem *epi,
+ 	return 0;
+ }
+ 
++/*
++ * reactivate oneshot lots of duplication from ep_modify
++ */
++int ep_modify_ondemand(wait_queue_entry_t *p)
++{
++	struct epitem * epi = ep_item_from_wait(p);
++	struct eventpoll * ep = epi->ep;
++	int pwake = 0;
++	poll_table pt;
++
++	// check if this works with simultaneous deactivate
++
++	if (!(epi->event.events & EPOLLONESHOT)) return 0;
++	if (epi->event.events & ~EP_PRIVATE_BITS) return 0;
++
++	lockdep_assert_irqs_enabled();
++
++	init_poll_funcptr(&pt, NULL);
++
++	epi->event.events |= epi->ondemand_events;
++	if (epi->event.events & EPOLLWAKEUP) { // I don't know this quite well yet
++		if (!ep_has_wakeup_source(epi))
++			ep_create_wakeup_source(epi);
++	} else if (ep_has_wakeup_source(epi)) {
++		ep_destroy_wakeup_source(epi);
++	}
++
++	smp_mb();
++
++	if (ep_item_poll(epi, &pt, 1)) {
++		write_lock_irq(&ep->lock);
++		if (!ep_is_linked(epi)) {
++			list_add_tail(&epi->rdllink, &ep->rdllist);
++			ep_pm_stay_awake(epi);
++
++			/* Notify waiting tasks that events are available */
++			if (waitqueue_active(&ep->wq))
++				wake_up(&ep->wq);
++			if (waitqueue_active(&ep->poll_wait))
++				pwake++;
++		}
++		write_unlock_irq(&ep->lock);
++	}
++
++	/* We have to call this outside the lock */
++	if (pwake)
++		ep_poll_safewake(ep, NULL);
++
++	return 0;
++}
++
+ static int ep_send_events(struct eventpoll *ep,
+ 			  struct epoll_event __user *events, int maxevents)
+ {
+@@ -2150,6 +2326,13 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
+ 		} else
+ 			error = -ENOENT;
+ 		break;
++	case EPOLL_CTL_ADD | EPOLL_CTL_ONDEMAND:
++		if (!epi) {
++			epds->events |= EPOLLERR | EPOLLHUP;
++			error = ep_insert_ondemand(ep, epds, tf.file, fd, full_check);
++		} else 
++			error = -EEXIST;
++		break;
+ 	}
+ 	mutex_unlock(&ep->mtx);
+ 
+diff --git a/include/uapi/linux/eventpoll.h b/include/uapi/linux/eventpoll.h
+index 8a3432d0f..f463bd8e5 100644
+--- a/include/uapi/linux/eventpoll.h
++++ b/include/uapi/linux/eventpoll.h
+@@ -26,6 +26,7 @@
+ #define EPOLL_CTL_ADD 1
+ #define EPOLL_CTL_DEL 2
+ #define EPOLL_CTL_MOD 3
++#define EPOLL_CTL_ONDEMAND 2048
+ 
+ /* Epoll event masks */
+ #define EPOLLIN		(__force __poll_t)0x00000001
+diff --git a/net/socket.c b/net/socket.c
+index 7f64a6ecc..fa0fa39f1 100644
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -938,6 +938,31 @@ INDIRECT_CALLABLE_DECLARE(int inet_recvmsg(struct socket *, struct msghdr *,
+ 					   size_t, int));
+ INDIRECT_CALLABLE_DECLARE(int inet6_recvmsg(struct socket *, struct msghdr *,
+ 					    size_t, int));
++
++int ep_modify_ondemand(wait_queue_entry_t *p);
++
++static inline int sock_in_ondemand(struct socket *sock) {
++	struct sock *sk = sock->sk;
++	struct socket_wq *wq;
++	struct wait_queue_head *wq_head;
++	unsigned long flags;
++	wait_queue_entry_t *curr;
++
++	// mimic __wake_up_sync_key()
++	rcu_read_lock();
++	wq = rcu_dereference(sk->sk_wq);
++	if (skwq_has_sleeper(wq)) {
++		wq_head = &wq->wait;
++		spin_lock_irqsave(&wq_head->lock, flags); // mutual exclusion with add_wait_queue and remove_wait_queue
++		list_for_each_entry(curr, &wq_head->head, entry) {
++			ep_modify_ondemand(curr);
++		}
++		spin_unlock_irqrestore(&wq_head->lock, flags);
++	}
++	rcu_read_unlock();
++	return 0;
++}
++
+ static inline int sock_recvmsg_nosec(struct socket *sock, struct msghdr *msg,
+ 				     int flags)
+ {
+@@ -1772,6 +1797,10 @@ struct file *do_accept(struct file *file, unsigned file_flags,
+ 
+ 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
+ 					false);
++
++	if (err == -EAGAIN || err == -EWOULDBLOCK)
++		sock_in_ondemand(sock);
++
+ 	if (err < 0)
+ 		goto out_fd;
+ 
+@@ -2092,6 +2121,9 @@ int __sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags,
+ 		flags |= MSG_DONTWAIT;
+ 	err = sock_recvmsg(sock, &msg, flags);
+ 
++	if (err == -EAGAIN || err == -EWOULDBLOCK)
++		sock_in_ondemand(sock);
++
+ 	if (err >= 0 && addr != NULL) {
+ 		err2 = move_addr_to_user(&address,
+ 					 msg.msg_namelen, addr, addr_len);
+@@ -2699,6 +2731,9 @@ long __sys_recvmsg(int fd, struct user_msghdr __user *msg, unsigned int flags,
+ 
+ 	err = ___sys_recvmsg(sock, msg, &msg_sys, flags, 0);
+ 
++	if (err == -EAGAIN || err == -EWOULDBLOCK)
++		sock_in_ondemand(sock);
++
+ 	fput_light(sock->file, fput_needed);
+ out:
+ 	return err;

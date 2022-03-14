@@ -11,6 +11,7 @@ char buffer[100];
 
 void errExit(const char * s) {
 	printf("errExit: %s\n", s);
+	finish();
 	exit(1);
 }
 
