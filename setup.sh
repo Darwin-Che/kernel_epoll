@@ -8,6 +8,8 @@ CF_BUILDROOT=0
 CF_KERNEL=0
 CF_RUN=1
 
+CF_KERNEL_VER=5.4
+
 if [[ $# -ne 0 ]]; then 
 
 	CF_INSTALL=0
@@ -76,19 +78,18 @@ echo "done!"
 
 function install_kernel {
 
-echo  -e "Fetching kernel 5.15.11 ... \t\t\t"
-if [[ ! -d linux ]]; then
+echo  -e "Fetching kernel $CF_KERNEL_VER ... \t\t\t"
+if [[ ! -d linux-$CF_KERNEL_VER ]]; then
 	echo  -e "\tstart download ... \t\t\t"
-	curl "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.15.11.tar.xz" --output "linux-5.15.11.tar.xz"
+	curl "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$CF_KERNEL_VER.tar.xz" --output "linux-$CF_KERNEL_VER.tar.xz"
 	echo  -e "\tdownload complete ... \t\t\t"
 	echo  -e "\tstart unzip... \t\t\t"
-	tar -xf "linux-5.15.11.tar.xz" 
-	mv "linux-5.15.11" "linux"
+	tar -xf "linux-$CF_KERNEL_VER.tar.xz" 
 	echo  -e "\tunzip complete ... \t\t\t"
-	rm "linux-5.15.11.tar.xz"
+	rm "linux-$CF_KERNEL_VER.tar.xz"
 fi
-echo "cp conf/linux.config linux/.config"
-cp conf/linux.config linux/.config
+echo "cp conf/linux.config linux-$CF_KERNEL_VER/.config"
+cp conf/linux.config linux-$CF_KERNEL_VER/.config
 echo "done!"
 
 }
@@ -96,7 +97,7 @@ echo "done!"
 function compile_kernel {
 
 echo -n -e "Compiling kernel... \t\t\t\t"
-pushd linux
+pushd linux-$CF_KERNEL_VER
 CC="ccache gcc" make -j$(nproc)
 if [[ $? -ne 0 ]]; then 
 	echo "Compiling kernel fail"
@@ -203,7 +204,7 @@ popd
 function run_qemu {
 
 qemu-system-x86_64 \
-		-kernel linux/arch/x86/boot/bzImage \
+		-kernel linux-$CF_KERNEL_VER/arch/x86/boot/bzImage \
 		-boot c \
 		-smp ${CF_SMP} \
 		-m ${CF_MEM} \
@@ -216,10 +217,10 @@ qemu-system-x86_64 \
 
 function debug_qemu {
 
-tmux split-window -h "gdb -q linux/vmlinux -ex 'target remote :1234'" \;
+tmux split-window -h "gdb -q linux-$CF_KERNEL_VER/vmlinux -ex 'target remote :1234'" \;
 qemu-system-x86_64 \
 		-s -S \
-		-kernel linux/arch/x86/boot/bzImage \
+		-kernel linux-$CF_KERNEL_VER/arch/x86/boot/bzImage \
 		-boot c \
 		-smp ${CF_SMP} \
 		-m ${CF_MEM} \
