@@ -8,6 +8,7 @@ CF_BUILDROOT=0
 CF_KERNEL=0
 CF_RUN=1
 
+CF_KERNEL_VER=5.15
 CF_KERNEL_VER=5.4
 
 if [[ $# -ne 0 ]]; then 
@@ -41,8 +42,6 @@ if [[ $# -ne 0 ]]; then
 				;;
 		esac
 	done
-
-	read
 fi
 
 function install_libfibre {
@@ -235,6 +234,8 @@ qemu-system-x86_64 \
 # ========================================================================
 # ========================================================================
 
+echo "VER = $CF_KERNEL_VER"
+read
 
 if [[ $CF_INSTALL = 1 ]]; then
 	install_kernel
