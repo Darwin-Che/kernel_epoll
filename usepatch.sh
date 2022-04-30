@@ -10,7 +10,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 if [[ $patch_name = 'lx' ]]; then
-	patch_name="epoll-ondemand-kernel-$patch_ver"
+	patch_name="epoll-$patch_ver"
 	patch_dir="linux-$patch_ver"
 elif [[ $patch_name = 'fb' ]]; then
 	patch_name='libfibre'
